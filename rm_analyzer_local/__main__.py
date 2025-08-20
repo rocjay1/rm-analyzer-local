@@ -4,9 +4,9 @@ Analyze a transactions CSV by generating and sending a summary email.
 Usage:
 ------
 
-    $ rm_analyzer [-h] [path]
+    $ rm_analyzer_local [-h] [path]
 
-    
+
 Options:
     -h, --help  show this help message and exit
 """
@@ -15,8 +15,8 @@ Options:
 import os
 import argparse
 
-import rm_analyzer
-from rm_analyzer import summarize, send
+import rm_analyzer_local
+from rm_analyzer_local import summarize, send
 
 
 def main():
@@ -50,8 +50,9 @@ def main():
         )
 
     # Main logic
-    print(f"Running rm_analyzer on: {path}")
-    dest, subject, html = summarize.build_summary(path, rm_analyzer.CONFIG)
+    print(f"Running rm_analyzer_local on: {path}")
+    config = rm_analyzer_local.get_config()
+    dest, subject, html = summarize.build_summary(path, config)
     send.gmail_send_message(dest, subject, html)
 
 

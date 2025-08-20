@@ -1,5 +1,6 @@
 """Functions for summarizing a transactions CSV."""
 
+
 # Standard library imports
 import pandas as pd
 
@@ -34,15 +35,12 @@ def _to_money(n):
     return f"{n:.2f}"
 
 
-def _write_summary_sentence(summ_df, tot_series, config):
+def _write_summary_sentence(summ_df, tot_series):
     """Writes the transactions CSV summary sentence."""
     people = list(summ_df.index)
     if len(people) == 2:
         p1, p2 = people
-        s = (
-            f"{p1} owes {p2}: "
-            f"{_to_money(0.5 * tot_series.sum() - tot_series[p1])}."
-        )
+        s = f"{p1} owes {p2}: " f"{_to_money(0.5 * tot_series.sum() - tot_series[p1])}."
     else:
         s = "See the table above for transaction totals by person, category."
     return s
@@ -138,7 +136,7 @@ def write_email_body(summ_df, tot_series, config):
 
     body_parts.append(
         f"""
-    <p>{_write_summary_sentence(summ_df, tot_series, config)}</p>
+    <p>{_write_summary_sentence(summ_df, tot_series)}</p>
 </body>
 </html>"""
     )

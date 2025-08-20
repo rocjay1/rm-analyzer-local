@@ -1,0 +1,25 @@
+build-windows:
+  stage: build
+  tags:
+    - saas-windows-medium-amd64
+  rules:
+    # Run on tagged release
+    - if: $CI_COMMIT_TAG
+  variables:
+    SECURE_FILES_DOWNLOAD_PATH: rm_analyzer_local\
+  script: 
+    # Install download-secure-files tool
+    - (Invoke-WebRequest -Uri https://gitlab.com/gitlab-org/incubation-engineering/mobile-devops/download-secure-files/-/raw/main/installer.ps1 -UseBasicParsing).Content | Invoke-Expression
+    # Install Python
+    - nuget.exe install python -Version 3.12.4 -ExcludeVersion
+    # Install Python dependencies
+    - python\tools\python.exe -m pip install --upgrade pip --no-warn-script-location
+    - python\tools\python.exe -m pip install -r requirements.txt --no-warn-script-location
+    - python\tools\python.exe -m pip install pyinstaller --no-warn-script-location
+    # Compile
+    - New-Item -Path "$HOME\.rma\config.json" -Force # Prevent PyInstaller from complaining in pipeline logs
+    # Mac: pyinstaller cli.py --name rma --add-data rm_analyzer_local/credentials.json:rm_analyzer_local --onefile
+    - python\tools\scripts\pyinstaller.exe cli.py --name rma --add-data rm_analyzer_local\credentials.json:rm_analyzer_local --onefile
+  artifacts:
+    paths:
+      - dist\

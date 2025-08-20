@@ -1,9 +1,12 @@
 """Functions for sending an email using Gmail and OAuth2."""
 
 # Standard library imports
+
 import os
 import base64
+import logging
 from email.message import EmailMessage
+from typing import Optional, Any, Callable
 
 from google.auth.transport.requests import Request
 from google.auth.exceptions import RefreshError
@@ -12,20 +15,31 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
-import rm_analyzer
+import rm_analyzer_local
 
 # If modifying these scopes, delete the file token.json
 SCOPES = ["https://www.googleapis.com/auth/gmail.send"]
 
 
-def gmail_send_message(destination, subject, html):
-    """Create and send an email message."""
-    creds = None
 
-    # The file token.json stores the user's access and refresh tokens, and is
-    #   created automatically when the authorization flow completes for the first
-    #   time
-    token_path = os.path.join(rm_analyzer.CONFIG_DIR, "token.json")
+def gmail_send_message(
+    destination: str,
+    subject: str,
+    html: str,
+    service_factory: Optional[Callable[[Any], Any]] = None,
+) -> Optional[Any]:
+    """Create and send an email message.
+
+    Args:
+        destination: Recipient email address.
+        subject: Email subject.
+        html: Email body as HTML.
+        service_factory: Optional function to create the Gmail API service (for testing/mocking).
+    Returns:
+        The sent message object, or None if sending failed.
+    """
+    creds = None
+    token_path = os.path.join(rm_analyzer_local.CONFIG_DIR, "token.json")
     if os.path.exists(token_path):
         creds = Credentials.from_authorized_user_file(token_path, SCOPES)
 
@@ -42,16 +56,18 @@ def gmail_send_message(destination, subject, html):
                 os.remove(token_path)
 
         if new_app_flow:
-            flow = InstalledAppFlow.from_client_config(rm_analyzer.CREDS, SCOPES)
+            flow = InstalledAppFlow.from_client_config(rm_analyzer_local.get_creds(), SCOPES)
             creds = flow.run_local_server(port=0)
 
         # Save the credentials for the next run
-        # pylint: disable=unspecified-encoding
-        with open(token_path, "w") as token:
+        with open(token_path, "w", encoding="utf-8") as token:
             token.write(creds.to_json())
 
     try:
-        service = build("gmail", "v1", credentials=creds)
+        if service_factory:
+            service = service_factory(creds)
+        else:
+            service = build("gmail", "v1", credentials=creds)
         message = EmailMessage()
         message.set_content(html, subtype="html")
         message["To"] = destination
@@ -60,14 +76,13 @@ def gmail_send_message(destination, subject, html):
         # Encoded message
         encoded_message = base64.urlsafe_b64encode(message.as_bytes()).decode()
         create_message = {"raw": encoded_message}
-        # pylint: disable=E1101
         send_message = (
             service.users().messages().send(userId="me", body=create_message).execute()
         )
 
-        print(f'Message Id: {send_message["id"]}')
+        logging.info('Message Id: %s', send_message["id"])
     except HttpError as error:
-        print(f"An error occurred: {error}")
+        logging.error('An error occurred: %s', error)
         send_message = None
 
     return send_message
