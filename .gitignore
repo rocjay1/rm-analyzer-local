@@ -1,5 +1,4 @@
 .venv/
-.vscode/
 rm_analyzer_local/__pycache__
 rm_analyzer_local/credentials.json
 rm_analyzer_local/token.json
