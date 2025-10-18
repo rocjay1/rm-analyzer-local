@@ -48,6 +48,12 @@ variable "communication_sender_address" {
   type        = string
 }
 
+variable "key_vault_admin_object_ids" {
+  description = "Object IDs granted administrative access to Key Vault secrets."
+  type        = list(string)
+  default     = []
+}
+
 variable "config_json" {
   description = "JSON document containing category and participant configuration."
   type        = string

@@ -4,16 +4,17 @@ Tools for generating a summary email from a Rocket Money (formerly "Truebill") t
 
 ## Cloud-native architecture
 
-- **Uploader Web App (App Service + Flask)** – Authenticated via Azure AD and limited to trusted users.
+- **Uploader Web App (App Service + Flask)** – Authenticated via Azure AD, limited to trusted users, and uploads directly to Blob Storage with its managed identity.
 - **Blob Storage** – Stores uploaded transaction exports and triggers analysis workflows.
-- **Azure Function** – Parses the CSV, reuses the summarization logic, and sends HTML summaries with Azure Communication Services Email.
+- **Azure Function** – Parses the CSV, reuses the summarization logic, and sends HTML summaries with Azure Communication Services Email using secrets pulled from Key Vault.
+- **Azure Key Vault** – Houses the Rocket Money configuration, Azure Communication credentials, the Function storage connection string, and the Azure AD client secret.
 - **Terraform** – End-to-end infrastructure as code in `infra/terraform`.
 
 See `docs/architecture.md` for the full design overview, required configuration, and deployment notes.
 
 ### Deploying to Azure
 
-1. Populate the Terraform variables (AAD credentials, allowed user emails, Azure Communication Services secrets, and `config_json`).
+1. Populate the Terraform variables (AAD credentials, allowed user emails, Azure Communication Services secrets, `config_json`, and optional Key Vault admin object IDs).
 2. `terraform init && terraform apply` inside `infra/terraform`.
 3. Zip-deploy `src/webapp` to the created App Service (`az webapp deploy ...`).
 4. Publish the Function App by deploying `src/function_app` (including the `rm_analyzer_local` package).

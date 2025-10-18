@@ -23,6 +23,7 @@ from werkzeug.utils import secure_filename
 
 # Third-party imports
 from azure.core.exceptions import AzureError
+from azure.identity import DefaultAzureCredential
 from azure.storage.blob import BlobServiceClient, ContentSettings
 
 
@@ -33,9 +34,18 @@ def _allowed_emails() -> set[str]:
 
 def _get_blob_service() -> BlobServiceClient:
     connection_string = os.getenv("STORAGE_ACCOUNT_CONNECTION_STRING")
-    if not connection_string:
-        raise RuntimeError("STORAGE_ACCOUNT_CONNECTION_STRING is not configured.")
-    return BlobServiceClient.from_connection_string(connection_string)
+    if connection_string:
+        return BlobServiceClient.from_connection_string(connection_string)
+
+    account_name = os.getenv("STORAGE_ACCOUNT_NAME")
+    if not account_name:
+        raise RuntimeError(
+            "STORAGE_ACCOUNT_NAME or STORAGE_ACCOUNT_CONNECTION_STRING must be configured."
+        )
+
+    credential = DefaultAzureCredential(exclude_interactive_browser_credential=True)
+    account_url = f"https://{account_name}.blob.core.windows.net"
+    return BlobServiceClient(account_url=account_url, credential=credential)
 
 
 def _extract_email_from_principal() -> str | None:

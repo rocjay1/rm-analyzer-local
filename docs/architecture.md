@@ -22,12 +22,15 @@
 - **Linux Function App**
   - Python 3.10 runtime.
   - Reuses existing `rm_analyzer_local.summarize` module.
-  - Reads configuration from the `CONFIG_JSON` application setting.
+  - Reads configuration and other secrets via Key Vault references.
   - Sends HTML summaries through Azure Communication Services.
 - **Linux Web App**
   - Hosts the Flask uploader (`src/webapp`).
   - Authentication enforced via App Service Authentication + Azure AD.
-  - Uploads files to Blob Storage using a connection string stored in app settings.
+  - Uploads files to Blob Storage using its managed identity (no connection strings at runtime).
+- **Key Vault**
+  - Stores the Rocket Money config JSON, Azure Communication credentials, the Azure AD client secret, and the Function App storage connection string.
+  - Managed identities for the web app and Function App have `Get/List` permissions; optional admins can be granted additional access.
 - **Application Insights**
   - Centralized telemetry for both the web app and the function.
 - **Azure Communication Services Email**
@@ -41,6 +44,7 @@ The Terraform module (`infra/terraform`) expects the following inputs:
 - `aad_tenant_id`, `aad_client_id`, `aad_client_secret` – credentials for the Azure AD app that protects the web frontend.
 - `communication_connection_string`, `communication_sender_address` – values from an Azure Communication Services Email resource.
 - `config_json` – JSON payload containing the categories and people definition used by the analyzer (same structure as the legacy `~/.rma/config.json`).
+- `key_vault_admin_object_ids` – optional list of Azure AD object IDs granted full secret access.
 
 Secrets such as the Azure Communication connection string and Azure AD client secret should be supplied via environment variables or a secure backend (e.g., Azure Key Vault) when running `terraform apply`.
 

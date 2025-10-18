@@ -29,6 +29,58 @@ resource "azurerm_storage_account" "main" {
   }
 }
 
+resource "azurerm_key_vault" "main" {
+  name                = "${local.base_name}-kv"
+  location            = azurerm_resource_group.main.location
+  resource_group_name = azurerm_resource_group.main.name
+  tenant_id           = var.aad_tenant_id
+  sku_name            = "standard"
+
+  enable_rbac_authorization  = false
+  purge_protection_enabled   = true
+  soft_delete_retention_days = 7
+}
+
+resource "azurerm_key_vault_access_policy" "admins" {
+  for_each = toset(var.key_vault_admin_object_ids)
+
+  key_vault_id = azurerm_key_vault.main.id
+  tenant_id    = var.aad_tenant_id
+  object_id    = each.value
+
+  secret_permissions = ["Get", "List", "Set", "Delete", "Recover"]
+}
+
+resource "azurerm_key_vault_secret" "communication_connection" {
+  name         = "CommunicationConnectionString"
+  value        = var.communication_connection_string
+  key_vault_id = azurerm_key_vault.main.id
+}
+
+resource "azurerm_key_vault_secret" "communication_sender" {
+  name         = "CommunicationSenderAddress"
+  value        = var.communication_sender_address
+  key_vault_id = azurerm_key_vault.main.id
+}
+
+resource "azurerm_key_vault_secret" "aad_client_secret" {
+  name         = "AadClientSecret"
+  value        = var.aad_client_secret
+  key_vault_id = azurerm_key_vault.main.id
+}
+
+resource "azurerm_key_vault_secret" "config_json" {
+  name         = "ConfigJson"
+  value        = var.config_json
+  key_vault_id = azurerm_key_vault.main.id
+}
+
+resource "azurerm_key_vault_secret" "storage_connection_string" {
+  name         = "StorageConnectionString"
+  value        = azurerm_storage_account.main.primary_connection_string
+  key_vault_id = azurerm_key_vault.main.id
+}
+
 resource "azurerm_storage_container" "uploads" {
   name                  = "uploads"
   storage_account_id    = azurerm_storage_account.main.id
@@ -80,14 +132,22 @@ resource "azurerm_linux_function_app" "analyzer" {
   app_settings = {
     FUNCTIONS_EXTENSION_VERSION           = "~4"
     FUNCTIONS_WORKER_RUNTIME              = "python"
-    AzureWebJobsStorage                   = azurerm_storage_account.main.primary_connection_string
+    AzureWebJobsStorage                   = "@Microsoft.KeyVault(SecretUri=${azurerm_key_vault_secret.storage_connection_string.secret_uri_with_version})"
     WEBSITE_RUN_FROM_PACKAGE              = "1"
-    CONFIG_JSON                           = var.config_json
-    AZURE_COMMUNICATION_CONNECTION_STRING = var.communication_connection_string
-    EMAIL_SENDER_ADDRESS                  = var.communication_sender_address
+    CONFIG_JSON                           = "@Microsoft.KeyVault(SecretUri=${azurerm_key_vault_secret.config_json.secret_uri_with_version})"
+    AZURE_COMMUNICATION_CONNECTION_STRING = "@Microsoft.KeyVault(SecretUri=${azurerm_key_vault_secret.communication_connection.secret_uri_with_version})"
+    EMAIL_SENDER_ADDRESS                  = "@Microsoft.KeyVault(SecretUri=${azurerm_key_vault_secret.communication_sender.secret_uri_with_version})"
     APPINSIGHTS_INSTRUMENTATIONKEY        = azurerm_application_insights.main.instrumentation_key
     APPLICATIONINSIGHTS_CONNECTION_STRING = azurerm_application_insights.main.connection_string
   }
+}
+
+resource "azurerm_key_vault_access_policy" "function" {
+  key_vault_id = azurerm_key_vault.main.id
+  tenant_id    = var.aad_tenant_id
+  object_id    = azurerm_linux_function_app.analyzer.identity[0].principal_id
+
+  secret_permissions = ["Get", "List"]
 }
 
 resource "azurerm_linux_web_app" "uploader" {
@@ -112,12 +172,12 @@ resource "azurerm_linux_web_app" "uploader" {
 
   app_settings = {
     SCM_DO_BUILD_DURING_DEPLOYMENT        = "1"
-    STORAGE_ACCOUNT_CONNECTION_STRING     = azurerm_storage_account.main.primary_connection_string
+    STORAGE_ACCOUNT_NAME                  = azurerm_storage_account.main.name
     UPLOAD_CONTAINER_NAME                 = azurerm_storage_container.uploads.name
     AUTHORIZED_USER_EMAILS                = var.authorized_user_emails
     APPINSIGHTS_INSTRUMENTATIONKEY        = azurerm_application_insights.main.instrumentation_key
     APPLICATIONINSIGHTS_CONNECTION_STRING = azurerm_application_insights.main.connection_string
-    AadClientSecret                       = var.aad_client_secret
+    AadClientSecret                       = "@Microsoft.KeyVault(SecretUri=${azurerm_key_vault_secret.aad_client_secret.secret_uri_with_version})"
   }
 
   auth_settings_v2 {
@@ -135,4 +195,24 @@ resource "azurerm_linux_web_app" "uploader" {
       client_secret_setting_name = "AadClientSecret"
     }
   }
+}
+
+resource "azurerm_key_vault_access_policy" "web" {
+  key_vault_id = azurerm_key_vault.main.id
+  tenant_id    = var.aad_tenant_id
+  object_id    = azurerm_linux_web_app.uploader.identity[0].principal_id
+
+  secret_permissions = ["Get", "List"]
+}
+
+resource "azurerm_role_assignment" "web_blob_contributor" {
+  scope                = azurerm_storage_account.main.id
+  role_definition_name = "Storage Blob Data Contributor"
+  principal_id         = azurerm_linux_web_app.uploader.identity[0].principal_id
+}
+
+resource "azurerm_role_assignment" "function_blob_contributor" {
+  scope                = azurerm_storage_account.main.id
+  role_definition_name = "Storage Blob Data Contributor"
+  principal_id         = azurerm_linux_function_app.analyzer.identity[0].principal_id
 }
