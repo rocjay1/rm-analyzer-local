@@ -1,6 +1,6 @@
 locals {
   base_name         = "${var.project_name}-${var.environment}"
-  sanitized_project = lower(regexreplace(var.project_name, "[^a-z0-9]", ""))
+  sanitized_project = join("", regexall("[a-z0-9]", lower(var.project_name)))
 }
 
 resource "random_string" "suffix" {
@@ -17,11 +17,11 @@ resource "azurerm_resource_group" "main" {
 }
 
 resource "azurerm_storage_account" "main" {
-  name                     = substr("${local.sanitized_project}${var.environment}${random_string.suffix.result}", 0, 24)
-  resource_group_name      = azurerm_resource_group.main.name
-  location                 = azurerm_resource_group.main.location
-  account_tier             = "Standard"
-  account_replication_type = "LRS"
+  name                            = substr("${local.sanitized_project}${var.environment}${random_string.suffix.result}", 0, 24)
+  resource_group_name             = azurerm_resource_group.main.name
+  location                        = azurerm_resource_group.main.location
+  account_tier                    = "Standard"
+  account_replication_type        = "LRS"
   allow_nested_items_to_be_public = false
 
   blob_properties {
@@ -31,7 +31,7 @@ resource "azurerm_storage_account" "main" {
 
 resource "azurerm_storage_container" "uploads" {
   name                  = "uploads"
-  storage_account_name  = azurerm_storage_account.main.name
+  storage_account_id    = azurerm_storage_account.main.id
   container_access_type = "private"
 }
 
@@ -48,7 +48,6 @@ resource "azurerm_service_plan" "function" {
   resource_group_name = azurerm_resource_group.main.name
   os_type             = "Linux"
   sku_name            = "Y1"
-  reserved            = true
 }
 
 resource "azurerm_service_plan" "web" {
@@ -57,7 +56,6 @@ resource "azurerm_service_plan" "web" {
   resource_group_name = azurerm_resource_group.main.name
   os_type             = "Linux"
   sku_name            = "B1"
-  reserved            = true
 }
 
 resource "azurerm_linux_function_app" "analyzer" {
@@ -80,15 +78,15 @@ resource "azurerm_linux_function_app" "analyzer" {
   }
 
   app_settings = {
-    FUNCTIONS_EXTENSION_VERSION             = "~4"
-    FUNCTIONS_WORKER_RUNTIME                = "python"
-    AzureWebJobsStorage                     = azurerm_storage_account.main.primary_connection_string
-    WEBSITE_RUN_FROM_PACKAGE                = "1"
-    CONFIG_JSON                             = var.config_json
-    AZURE_COMMUNICATION_CONNECTION_STRING   = var.communication_connection_string
-    EMAIL_SENDER_ADDRESS                    = var.communication_sender_address
-    APPINSIGHTS_INSTRUMENTATIONKEY          = azurerm_application_insights.main.instrumentation_key
-    APPLICATIONINSIGHTS_CONNECTION_STRING   = azurerm_application_insights.main.connection_string
+    FUNCTIONS_EXTENSION_VERSION           = "~4"
+    FUNCTIONS_WORKER_RUNTIME              = "python"
+    AzureWebJobsStorage                   = azurerm_storage_account.main.primary_connection_string
+    WEBSITE_RUN_FROM_PACKAGE              = "1"
+    CONFIG_JSON                           = var.config_json
+    AZURE_COMMUNICATION_CONNECTION_STRING = var.communication_connection_string
+    EMAIL_SENDER_ADDRESS                  = var.communication_sender_address
+    APPINSIGHTS_INSTRUMENTATIONKEY        = azurerm_application_insights.main.instrumentation_key
+    APPLICATIONINSIGHTS_CONNECTION_STRING = azurerm_application_insights.main.connection_string
   }
 }
 
@@ -110,7 +108,6 @@ resource "azurerm_linux_web_app" "uploader" {
     ftps_state          = "Disabled"
     http2_enabled       = true
     app_command_line    = "gunicorn --bind=0.0.0.0 --timeout 600 app:app"
-    application_insights_key = azurerm_application_insights.main.instrumentation_key
   }
 
   app_settings = {
@@ -133,8 +130,8 @@ resource "azurerm_linux_web_app" "uploader" {
     }
 
     active_directory_v2 {
-      client_id                 = var.aad_client_id
-      tenant_id                 = var.aad_tenant_id
+      client_id                  = var.aad_client_id
+      tenant_auth_endpoint       = "https://login.microsoftonline.com/${var.aad_tenant_id}/v2.0"
       client_secret_setting_name = "AadClientSecret"
     }
   }
