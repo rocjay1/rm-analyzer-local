@@ -1,0 +1,4 @@
+Flask>=2.3.0
+azure-storage-blob>=12.16.0
+azure-core>=1.28.0
+gunicorn>=21.2.0

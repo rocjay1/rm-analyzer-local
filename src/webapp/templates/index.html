@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Rocket Money Analyzer Upload</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+</head>
+<body>
+<main class="container">
+    <h1>Rocket Money Analyzer</h1>
+    <p>Signed in as <strong>{{ user_email }}</strong></p>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            <section>
+                {% for category, message in messages %}
+                    <article class="{{ category }}">
+                        {{ message }}
+                    </article>
+                {% endfor %}
+            </section>
+        {% endif %}
+    {% endwith %}
+
+    <form method="post" enctype="multipart/form-data">
+        <label for="file">Upload Rocket Money CSV export</label>
+        <input type="file" id="file" name="file" accept=".csv" required>
+        <small>Exports should follow the <code>*-transactions.csv</code> pattern.</small>
+        <button type="submit">Upload</button>
+    </form>
+
+    <p>
+        <a href="/.auth/logout">Sign out</a>
+    </p>
+</main>
+</body>
+</html>
