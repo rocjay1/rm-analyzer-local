@@ -4,8 +4,6 @@
 import json
 import logging
 import os
-import pathlib
-import sys
 import tempfile
 from typing import List, Optional
 
@@ -13,24 +11,7 @@ from typing import List, Optional
 import azure.functions as func
 from azure.communication.email import EmailClient
 
-
-def _ensure_repo_root_on_path() -> None:
-    """Add the project root (containing rm_analyzer_local) to sys.path."""
-    module_path = pathlib.Path(__file__).resolve()
-    for candidate in (module_path.parent,) + tuple(module_path.parents):
-        if (candidate / "rm_analyzer_local").is_dir():
-            candidate_str = str(candidate)
-            if candidate_str not in sys.path:
-                sys.path.insert(0, candidate_str)
-            return
-    logging.warning(
-        "rm_analyzer_local package directory not found adjacent to function app."
-    )
-
-
-_ensure_repo_root_on_path()
-
-from rm_analyzer_local import summarize  # pylint: disable=wrong-import-position
+from function_app import summarizer
 
 
 def _load_config() -> dict:
@@ -95,7 +76,7 @@ def main(blob: func.InputStream) -> None:
 
     try:
         config = _get_config()
-        destinations, subject, html = summarize.build_summary(temp_path, config)
+        destinations, subject, html = summarizer.build_summary(temp_path, config)
         _send_summary_email(destinations, subject, html)
         logging.info("Summary email sent to: %s", ", ".join(destinations))
     finally:

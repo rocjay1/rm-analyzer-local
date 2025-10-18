@@ -21,7 +21,7 @@
   - The same account backs the Function App's runtime storage.
 - **Linux Function App**
   - Python 3.10 runtime.
-  - Reuses existing `rm_analyzer_local.summarize` module.
+  - Loads the summarization utilities from `src/function_app/summarizer.py`.
   - Reads configuration and other secrets via Key Vault references.
   - Sends HTML summaries through Azure Communication Services.
 - **Linux Web App**
@@ -53,10 +53,8 @@ Secrets such as the Azure Communication connection string and Azure AD client se
 1. Initialize Terraform inside `infra/terraform`.
 2. Provide the required variables (via `terraform.tfvars`, CLI flags, or environment variables).
 3. Deploy the uploader web application by zip-deploying the contents of `src/webapp`.
-4. Deploy the Function App by publishing `src/function_app` along with the `rm_analyzer_local` module.
+4. Deploy the Function App by publishing `src/function_app`.
 5. Verify:
    - Users can authenticate and upload files.
    - Blob uploads trigger the Function App automatically.
    - Summary emails arrive via Azure Communication Services.
-
-The legacy CLI (`rm_analyzer_local`) remains available for local execution, and both implementations now reuse the same summarization logic.

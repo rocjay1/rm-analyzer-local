@@ -1,6 +1,3 @@
-google-api-python-client 
-google-auth-httplib2 
-google-auth-oauthlib
 pandas
 azure-functions
 azure-communication-email>=1.0.0

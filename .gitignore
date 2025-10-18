@@ -1,10 +1,12 @@
+# python virtual environment
 .venv/
-rm_analyzer_local/__pycache__
-rm_analyzer_local/credentials.json
-rm_analyzer_local/token.json
-build/
-dist/
-rma.spec
+
+# pytest
 tests/__pycache__
 .pytest_cache
+
+# terraform
 infra/terraform/.terraform.lock.hcl
+
+# python src
+src/function_app/__pycache__
