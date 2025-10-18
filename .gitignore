@@ -7,3 +7,4 @@ dist/
 rma.spec
 tests/__pycache__
 .pytest_cache
+infra/terraform/.terraform.lock.hcl

@@ -7,22 +7,28 @@ import os
 import pathlib
 import sys
 import tempfile
-from typing import List
+from typing import List, Optional
 
 # Third-party imports
 import azure.functions as func
-from azure.communication.email import (
-    EmailAddress,
-    EmailClient,
-    EmailContent,
-    EmailMessage,
-    EmailRecipients,
-)
+from azure.communication.email import EmailClient
 
-# Ensure the repository root is on sys.path so we can reuse shared modules.
-REPO_ROOT = pathlib.Path(__file__).resolve().parents[4]
-if str(REPO_ROOT) not in sys.path:
-    sys.path.append(str(REPO_ROOT))
+
+def _ensure_repo_root_on_path() -> None:
+    """Add the project root (containing rm_analyzer_local) to sys.path."""
+    module_path = pathlib.Path(__file__).resolve()
+    for candidate in (module_path.parent,) + tuple(module_path.parents):
+        if (candidate / "rm_analyzer_local").is_dir():
+            candidate_str = str(candidate)
+            if candidate_str not in sys.path:
+                sys.path.insert(0, candidate_str)
+            return
+    logging.warning(
+        "rm_analyzer_local package directory not found adjacent to function app."
+    )
+
+
+_ensure_repo_root_on_path()
 
 from rm_analyzer_local import summarize  # pylint: disable=wrong-import-position
 
@@ -51,19 +57,29 @@ def _send_summary_email(destinations: List[str], subject: str, html: str) -> Non
 
     client = _get_email_client()
 
-    message = EmailMessage(
-        sender=sender,
-        content=EmailContent(subject=subject, html=html),
-        recipients=EmailRecipients(
-            to=[EmailAddress(email=address.strip()) for address in destinations]
-        ),
-    )
+    message_payload = {
+        "senderAddress": sender,
+        "content": {
+            "subject": subject,
+            "html": html,
+        },
+        "recipients": {
+            "to": [{"address": address.strip()} for address in destinations]
+        },
+    }
 
-    poller = client.begin_send(message)
+    poller = client.begin_send(message_payload)
     _ = poller.result()
 
 
-CONFIG = _load_config()
+_CONFIG_CACHE: Optional[dict] = None
+
+
+def _get_config() -> dict:
+    global _CONFIG_CACHE  # noqa: PLW0603
+    if _CONFIG_CACHE is None:
+        _CONFIG_CACHE = _load_config()
+    return _CONFIG_CACHE
 
 
 def main(blob: func.InputStream) -> None:
@@ -78,7 +94,8 @@ def main(blob: func.InputStream) -> None:
         temp_path = handle.name
 
     try:
-        destinations, subject, html = summarize.build_summary(temp_path, CONFIG)
+        config = _get_config()
+        destinations, subject, html = summarize.build_summary(temp_path, config)
         _send_summary_email(destinations, subject, html)
         logging.info("Summary email sent to: %s", ", ".join(destinations))
     finally:
