@@ -23,16 +23,23 @@ from werkzeug.utils import secure_filename
 
 # Third-party imports
 from azure.core.exceptions import AzureError
-from azure.identity import DefaultAzureCredential
-from azure.storage.blob import BlobServiceClient, ContentSettings
+from azure.identity import (
+    DefaultAzureCredential,
+)
+from azure.storage.blob import (
+    BlobServiceClient,
+    ContentSettings,
+)
 
 
 def _allowed_emails() -> set[str]:
+    """Return the configured set of authorized uploader email addresses."""
     raw = os.getenv("AUTHORIZED_USER_EMAILS", "")
     return {email.strip().lower() for email in raw.split(",") if email.strip()}
 
 
 def _get_blob_service() -> BlobServiceClient:
+    """Create a BlobServiceClient using either a connection string or managed identity."""
     connection_string = os.getenv("STORAGE_ACCOUNT_CONNECTION_STRING")
     if connection_string:
         return BlobServiceClient.from_connection_string(connection_string)
@@ -49,6 +56,7 @@ def _get_blob_service() -> BlobServiceClient:
 
 
 def _extract_email_from_principal() -> str | None:
+    """Extract the authenticated user's email address from platform headers, if present."""
     header = request.headers.get("X-MS-CLIENT-PRINCIPAL")
     if not header:
         return None
@@ -98,6 +106,7 @@ def require_login() -> None:
 
 @app.route("/", methods=["GET", "POST"])
 def index():
+    """Render the upload form and handle CSV upload POSTs."""
     if request.method == "POST":
         upload = request.files.get("file")
         if not upload or upload.filename == "":
@@ -110,7 +119,7 @@ def index():
             return redirect(url_for("index"))
 
         blob_name = (
-            f"{dt.datetime.utcnow():%Y%m%d-%H%M%S}-"
+            f"{dt.datetime.now(dt.timezone.utc):%Y%m%d-%H%M%S}-"
             f"{uuid.uuid4().hex[:8]}-{filename or 'transactions.csv'}"
         )
 
@@ -137,6 +146,7 @@ def index():
 
 @app.get("/healthz")
 def healthcheck():
+    """Expose a simple health probe endpoint."""
     return {"status": "ok"}
 
 

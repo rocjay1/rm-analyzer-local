@@ -6,7 +6,7 @@ from typing import Dict, Iterable, IO, List, Tuple, Union
 
 import html
 import os
-import pandas as pd
+import pandas as pd  # pylint: disable=import-error
 
 CsvInput = Union[str, os.PathLike[str], IO[str], IO[bytes]]
 
@@ -59,7 +59,17 @@ def write_email_body(
     summary_df: pd.DataFrame, totals: pd.Series, config: Dict[str, Iterable]
 ) -> str:
     """Return HTML body for summary email."""
-    categories: List[str] = list(summary_df.columns)
+    configured_categories: List[str] = [
+        category
+        for category in config.get("Categories", [])
+        if category in summary_df.columns
+    ]
+    remaining_categories = [
+        category
+        for category in summary_df.columns
+        if category not in configured_categories
+    ]
+    categories: List[str] = [*configured_categories, *remaining_categories]
     people: List[str] = list(summary_df.index)
 
     body_parts: List[str] = [
@@ -160,7 +170,7 @@ def build_summary(path: CsvInput, config: Dict[str, Iterable]) -> Tuple[List[str
     summary_df = build_summary_df(df, config)
     totals = summary_df.sum(axis=1)
     totals.name = "Total"
-    html = write_email_body(summary_df, totals, config)
+    html_body = write_email_body(summary_df, totals, config)
 
     date_range = ""
     if not df["Date"].empty:
@@ -169,5 +179,9 @@ def build_summary(path: CsvInput, config: Dict[str, Iterable]) -> Tuple[List[str
         date_range = f": {min_date} - {max_date}"
 
     subject = f"Transactions Summary{date_range}"
-    destinations = [person.get("Email") for person in config.get("People", []) if person.get("Email")]
-    return destinations, subject, html
+    destinations = [
+        person.get("Email")
+        for person in config.get("People", [])
+        if person.get("Email")
+    ]
+    return destinations, subject, html_body

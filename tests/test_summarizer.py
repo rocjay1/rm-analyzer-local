@@ -1,5 +1,7 @@
 """Tests for the summarizer module."""
 
+# pylint: disable=redefined-outer-name
+
 from __future__ import annotations
 
 # Standard library imports
@@ -27,6 +29,7 @@ from shared_code import summarizer  # noqa: E402  pylint: disable=wrong-import-p
 
 @pytest.fixture
 def summarizer_config() -> Dict[str, List]:
+    """Return a representative configuration with two people and categories."""
     return {
         "Categories": ["Dining & Drinks", "Groceries"],
         "People": [
@@ -46,6 +49,7 @@ def summarizer_config() -> Dict[str, List]:
 
 @pytest.fixture
 def transactions_df() -> pd.DataFrame:
+    """Provide a fixture containing sample Rocket Money transactions."""
     return pd.DataFrame(
         [
             {
@@ -96,10 +100,12 @@ def transactions_df() -> pd.DataFrame:
 
 @pytest.fixture
 def summary_df(transactions_df: pd.DataFrame, summarizer_config: Dict[str, List]) -> pd.DataFrame:
+    """Build the summary DataFrame using the fixture data."""
     return summarizer.build_summary_df(transactions_df, summarizer_config)
 
 
 def test_build_summary_df_groups_totals_per_owner_and_category(summary_df: pd.DataFrame) -> None:
+    """Ensure per-person, per-category totals match the expected pivot output."""
     expected = pd.DataFrame(
         {
             "Dining & Drinks": {"Alice": 50.0, "Bob": 30.0},
@@ -111,7 +117,10 @@ def test_build_summary_df_groups_totals_per_owner_and_category(summary_df: pd.Da
     tm.assert_frame_equal(summary_df, expected, check_like=True)
 
 
-def test_write_email_body_renders_difference_row(summary_df: pd.DataFrame, summarizer_config: Dict[str, List]) -> None:
+def test_write_email_body_renders_difference_row(
+    summary_df: pd.DataFrame, summarizer_config: Dict[str, List]
+) -> None:
+    """Verify the email body includes the net-difference row for two people."""
     totals = summary_df.sum(axis=1)
     html = summarizer.write_email_body(summary_df, totals, summarizer_config)
 
@@ -124,6 +133,7 @@ def test_write_email_body_renders_difference_row(summary_df: pd.DataFrame, summa
 def test_build_summary_reads_csv_and_returns_payload(
     transactions_df: pd.DataFrame, summarizer_config: Dict[str, List]
 ) -> None:
+    """Check that CSV uploads convert to the expected email payload."""
     csv_buffer = StringIO()
     transactions_df.to_csv(csv_buffer, index=False)
     csv_buffer.seek(0)
@@ -137,6 +147,7 @@ def test_build_summary_reads_csv_and_returns_payload(
 
 
 def test_write_email_body_escapes_html_entities() -> None:
+    """Confirm the email body properly HTML-escapes dangerous content."""
     summary_df = pd.DataFrame(
         {
             "<script>alert(1)</script>": {
@@ -161,6 +172,7 @@ def test_write_email_body_escapes_html_entities() -> None:
     assert "<th>&lt;script&gt;alert(1)&lt;/script&gt;</th>" in html
     assert "<td>&lt;img src=x onerror=y&gt;</td>" in html
     assert "<td>&lt;svg onload=alert(2)&gt;</td>" in html
-    assert "&lt;img src=x onerror=y&gt; owes &lt;svg onload=alert(2)&gt;: 25.00." in html
+    owes_sentence = "&lt;img src=x onerror=y&gt; owes &lt;svg onload=alert(2)&gt;: 25.00."
+    assert owes_sentence in html
     assert "<img src=x onerror=y>" not in html
     assert "<svg onload=alert(2)>" not in html
