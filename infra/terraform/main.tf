@@ -36,7 +36,7 @@ resource "azurerm_key_vault" "main" {
   tenant_id           = var.aad_tenant_id
   sku_name            = "standard"
 
-  enable_rbac_authorization  = false
+  rbac_authorization_enabled = false
   purge_protection_enabled   = true
   soft_delete_retention_days = 7
 }
@@ -75,12 +75,6 @@ resource "azurerm_key_vault_secret" "config_json" {
   key_vault_id = azurerm_key_vault.main.id
 }
 
-resource "azurerm_key_vault_secret" "storage_connection_string" {
-  name         = "StorageConnectionString"
-  value        = azurerm_storage_account.main.primary_connection_string
-  key_vault_id = azurerm_key_vault.main.id
-}
-
 resource "azurerm_storage_container" "uploads" {
   name                  = "uploads"
   storage_account_id    = azurerm_storage_account.main.id
@@ -116,7 +110,7 @@ resource "azurerm_linux_function_app" "analyzer" {
   resource_group_name        = azurerm_resource_group.main.name
   service_plan_id            = azurerm_service_plan.function.id
   storage_account_name       = azurerm_storage_account.main.name
-  storage_account_access_key = azurerm_storage_account.main.primary_access_key
+  storage_uses_managed_identity = true
 
   identity {
     type = "SystemAssigned"
@@ -132,13 +126,16 @@ resource "azurerm_linux_function_app" "analyzer" {
   app_settings = {
     FUNCTIONS_EXTENSION_VERSION           = "~4"
     FUNCTIONS_WORKER_RUNTIME              = "python"
-    AzureWebJobsStorage                   = "@Microsoft.KeyVault(SecretUri=${azurerm_key_vault_secret.storage_connection_string.secret_uri_with_version})"
     WEBSITE_RUN_FROM_PACKAGE              = "1"
     CONFIG_JSON                           = "@Microsoft.KeyVault(SecretUri=${azurerm_key_vault_secret.config_json.secret_uri_with_version})"
     AZURE_COMMUNICATION_CONNECTION_STRING = "@Microsoft.KeyVault(SecretUri=${azurerm_key_vault_secret.communication_connection.secret_uri_with_version})"
     EMAIL_SENDER_ADDRESS                  = "@Microsoft.KeyVault(SecretUri=${azurerm_key_vault_secret.communication_sender.secret_uri_with_version})"
     APPINSIGHTS_INSTRUMENTATIONKEY        = azurerm_application_insights.main.instrumentation_key
     APPLICATIONINSIGHTS_CONNECTION_STRING = azurerm_application_insights.main.connection_string
+    AzureWebJobsStorage__credential       = "managedidentity"
+    AzureWebJobsStorage__accountName      = azurerm_storage_account.main.name
+    AzureWebJobsStorage__blobServiceUri   = "https://${azurerm_storage_account.main.name}.blob.core.windows.net"
+    AzureWebJobsStorage__queueServiceUri  = "https://${azurerm_storage_account.main.name}.queue.core.windows.net"
   }
 }
 
@@ -214,5 +211,11 @@ resource "azurerm_role_assignment" "web_blob_contributor" {
 resource "azurerm_role_assignment" "function_blob_contributor" {
   scope                = azurerm_storage_account.main.id
   role_definition_name = "Storage Blob Data Contributor"
+  principal_id         = azurerm_linux_function_app.analyzer.identity[0].principal_id
+}
+
+resource "azurerm_role_assignment" "function_queue_contributor" {
+  scope                = azurerm_storage_account.main.id
+  role_definition_name = "Storage Queue Data Contributor"
   principal_id         = azurerm_linux_function_app.analyzer.identity[0].principal_id
 }
