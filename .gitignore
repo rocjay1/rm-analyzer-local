@@ -1,5 +1,6 @@
-# python virtual environment
+# python virtual environments
 .venv/
+.venv-python-3_10
 
 # pytest
 tests/__pycache__
