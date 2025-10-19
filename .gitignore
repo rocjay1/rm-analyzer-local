@@ -10,3 +10,4 @@ infra/terraform/.terraform.lock.hcl
 
 # python src
 src/function_app/__pycache__
+src/function_app/shared_code/__pycache__

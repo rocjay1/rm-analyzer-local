@@ -4,6 +4,7 @@ from __future__ import annotations
 
 # Standard library imports
 import sys
+from io import StringIO
 from pathlib import Path
 from typing import Dict, List
 
@@ -15,10 +16,13 @@ import pytest
 # Make sure the application code is importable when pytest discovers tests
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SRC_DIR = REPO_ROOT / "src"
+FUNCTION_APP_DIR = SRC_DIR / "function_app"
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
+if str(FUNCTION_APP_DIR) not in sys.path:
+    sys.path.insert(0, str(FUNCTION_APP_DIR))
 
-from function_app import summarizer  # noqa: E402  pylint: disable=wrong-import-position
+from shared_code import summarizer  # noqa: E402  pylint: disable=wrong-import-position
 
 
 @pytest.fixture
@@ -118,14 +122,45 @@ def test_write_email_body_renders_difference_row(summary_df: pd.DataFrame, summa
 
 
 def test_build_summary_reads_csv_and_returns_payload(
-    transactions_df: pd.DataFrame, summarizer_config: Dict[str, List], tmp_path
+    transactions_df: pd.DataFrame, summarizer_config: Dict[str, List]
 ) -> None:
-    csv_path = tmp_path / "jan-transactions.csv"
-    transactions_df.to_csv(csv_path, index=False)
+    csv_buffer = StringIO()
+    transactions_df.to_csv(csv_buffer, index=False)
+    csv_buffer.seek(0)
 
-    destinations, subject, html = summarizer.build_summary(str(csv_path), summarizer_config)
+    destinations, subject, html = summarizer.build_summary(csv_buffer, summarizer_config)
 
     assert destinations == ["alice@example.com", "bob@example.com"]
     assert subject == "Transactions Summary: 01/01 - 01/06"
     assert "<td>Difference</td>" in html
     assert "Dining &amp; Drinks" in html
+
+
+def test_write_email_body_escapes_html_entities() -> None:
+    summary_df = pd.DataFrame(
+        {
+            "<script>alert(1)</script>": {
+                "<img src=x onerror=y>": 25.0,
+                "<svg onload=alert(2)>": 75.0,
+            }
+        }
+    )
+    summary_df.index.name = "Owner"
+    summary_df.columns.name = "Category"
+    totals = summary_df.sum(axis=1)
+    config = {
+        "Categories": ["<script>alert(1)</script>"],
+        "People": [
+            {"Name": "<img src=x onerror=y>", "Accounts": [123], "Email": "safe@example.com"},
+            {"Name": "<svg onload=alert(2)>", "Accounts": [456], "Email": "safe2@example.com"},
+        ],
+    }
+
+    html = summarizer.write_email_body(summary_df, totals, config)
+
+    assert "<th>&lt;script&gt;alert(1)&lt;/script&gt;</th>" in html
+    assert "<td>&lt;img src=x onerror=y&gt;</td>" in html
+    assert "<td>&lt;svg onload=alert(2)&gt;</td>" in html
+    assert "&lt;img src=x onerror=y&gt; owes &lt;svg onload=alert(2)&gt;: 25.00." in html
+    assert "<img src=x onerror=y>" not in html
+    assert "<svg onload=alert(2)>" not in html

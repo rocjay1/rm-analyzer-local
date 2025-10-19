@@ -1,16 +1,18 @@
 """Utilities for building Rocket Money transaction summaries."""
 
-# Standard library imports
 from __future__ import annotations
 
-from typing import Dict, Iterable, List, Tuple
+from typing import Dict, Iterable, IO, List, Tuple, Union
 
-# Third-party imports
+import html
+import os
 import pandas as pd
+
+CsvInput = Union[str, os.PathLike[str], IO[str], IO[bytes]]
 
 
 def _build_owners_dict(config: Dict[str, Iterable]) -> Dict[str, Dict[int, str]]:
-    """Build dictionary containing Account Owner, Account Number from config."""
+    """Build dictionary containing account owner and number from config."""
     owners_dict: Dict[str, Dict[int, str]] = {"Owner": {}, "Account Number": {}}
     index = 0
     for person in config.get("People", []):
@@ -88,7 +90,7 @@ def write_email_body(
     ]
 
     for category in categories:
-        body_parts.append(f"\n                <th>{category}</th>")
+        body_parts.append(f"\n                <th>{html.escape(str(category), quote=True)}</th>")
 
     body_parts.append(
         """
@@ -102,7 +104,7 @@ def write_email_body(
         body_parts.append(
             f"""
             <tr>
-                <td>{person}</td>"""
+                <td>{html.escape(str(person), quote=True)}</td>"""
         )
         for category in categories:
             body_parts.append(
@@ -141,17 +143,17 @@ def write_email_body(
 
     body_parts.append(
         f"""
-    <p>{_write_summary_sentence(summary_df, totals)}</p>
+    <p>{html.escape(_write_summary_sentence(summary_df, totals), quote=True)}</p>
 </body>
 </html>"""
     )
 
-    body = "".join(body_parts).replace("&", "&amp;")
+    body = "".join(body_parts)
     return body
 
 
-def build_summary(path: str, config: Dict[str, Iterable]) -> Tuple[List[str], str, str]:
-    """Build email payload (destinations, subject, html) from CSV path."""
+def build_summary(path: CsvInput, config: Dict[str, Iterable]) -> Tuple[List[str], str, str]:
+    """Build email payload (destinations, subject, html) from CSV input."""
     df = pd.read_csv(path)
     df["Date"] = pd.to_datetime(df["Date"])
 
